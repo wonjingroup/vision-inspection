@@ -8,7 +8,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 
 from config import BASE_DIR, MODELS_DIR, TRAINING_WORK_DIR
@@ -60,6 +60,32 @@ async def capture_frame(request: Request, product_code: str = "default"):
     filepath.write_bytes(buf.tobytes())
 
     h, w = frame.shape[:2]
+    return {
+        "filename": filename,
+        "width": w,
+        "height": h,
+        "url": f"/api/training/images/{product_code}/{filename}",
+    }
+
+
+@router.post("/training/upload")
+async def upload_frame(product_code: str = "default", file: UploadFile = File(...)):
+    """브라우저 웹캠에서 촬영한 프레임 업로드."""
+    img_dir = _product_dir(product_code) / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    filename = f"cap_{ts}.jpg"
+    filepath = img_dir / filename
+
+    content = await file.read()
+    filepath.write_bytes(content)
+
+    # 이미지 크기 읽기
+    nparr = np.frombuffer(content, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    h, w = img.shape[:2] if img is not None else (720, 1280)
+
     return {
         "filename": filename,
         "width": w,

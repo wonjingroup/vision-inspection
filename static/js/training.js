@@ -29,6 +29,10 @@ let imgObj = null;
 let scale = 1;
 let offsetX = 0, offsetY = 0;
 
+// 브라우저 웹캠
+const trainingVideo = document.getElementById('training-camera');
+let cameraReady = false;
+
 const CLASS_COLORS = [
     '#4caf50', '#f44336', '#2196f3', '#ff9800', '#9c27b0',
     '#00bcd4', '#ffeb3b', '#e91e63', '#8bc34a', '#ff5722',
@@ -44,6 +48,7 @@ function getClassColor(name) {
 
 async function init() {
     try {
+        await initTrainingCamera();
         await loadProducts();
         await loadClasses();
         await loadImages();
@@ -54,6 +59,24 @@ async function init() {
         console.log('[training] init 완료, product:', selectedProductCode);
     } catch (e) {
         console.error('[training] init 오류:', e);
+    }
+}
+
+async function initTrainingCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        trainingVideo.srcObject = stream;
+        if (trainingVideo.readyState < 1) {
+            await new Promise(r => trainingVideo.addEventListener('loadedmetadata', r, { once: true }));
+        }
+        trainingVideo.play();
+        cameraReady = true;
+        // 이미지 선택 전에는 카메라 미리보기 표시
+        trainingVideo.style.display = '';
+    } catch (e) {
+        console.warn('[training] 카메라 사용 불가:', e.message);
+        trainingVideo.style.display = 'none';
+        cameraReady = false;
     }
 }
 
@@ -212,8 +235,34 @@ function renderImageGrid() {
 }
 
 async function captureFrame() {
+    if (!cameraReady || trainingVideo.readyState < 2) {
+        // 폴백: 서버 카메라 사용
+        try {
+            const resp = await fetch(`/api/training/capture?product_code=${encodeURIComponent(selectedProductCode)}`, { method: 'POST' });
+            const data = await resp.json();
+            if (data.error) { alert(data.error); return; }
+            await loadImages();
+            await loadDatasetStats();
+            selectImage({ filename: data.filename, url: data.url, width: data.width, height: data.height });
+        } catch (e) { alert('촬영 오류: ' + e.message); }
+        return;
+    }
+
     try {
-        const resp = await fetch(`/api/training/capture?product_code=${encodeURIComponent(selectedProductCode)}`, { method: 'POST' });
+        // 브라우저 웹캠에서 캡처
+        const capCanvas = document.createElement('canvas');
+        capCanvas.width = trainingVideo.videoWidth;
+        capCanvas.height = trainingVideo.videoHeight;
+        capCanvas.getContext('2d').drawImage(trainingVideo, 0, 0);
+        const blob = await new Promise(r => capCanvas.toBlob(r, 'image/jpeg', 0.95));
+        if (!blob) { alert('캡처 실패'); return; }
+
+        const formData = new FormData();
+        formData.append('file', blob, 'capture.jpg');
+
+        const resp = await fetch(`/api/training/upload?product_code=${encodeURIComponent(selectedProductCode)}`, {
+            method: 'POST', body: formData
+        });
         const data = await resp.json();
         if (data.error) { alert(data.error); return; }
         await loadImages();
@@ -253,6 +302,9 @@ async function selectImage(img) {
         renderClassButtons();
     }
     isDirty = false;
+
+    // 이미지 선택 시 카메라 숨기기
+    trainingVideo.style.display = 'none';
 
     imgObj = new Image();
     imgObj.onload = () => {
