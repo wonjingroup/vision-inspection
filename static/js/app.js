@@ -23,18 +23,24 @@ async function initCamera() {
     const statusEl = document.getElementById('camera-status');
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' }
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } }
         });
         video.srcObject = stream;
+
+        // 메타데이터 로드 대기 후 play
+        await new Promise((resolve, reject) => {
+            video.onloadedmetadata = resolve;
+            video.onerror = reject;
+            setTimeout(reject, 5000); // 5초 타임아웃
+        });
         await video.play();
-        statusEl.textContent = '카메라 연결됨';
-        statusEl.style.color = '#4caf50';
 
         // 캡처 캔버스 크기 설정
-        video.addEventListener('loadedmetadata', () => {
-            captureCanvas.width = video.videoWidth;
-            captureCanvas.height = video.videoHeight;
-        });
+        captureCanvas.width = video.videoWidth || 1280;
+        captureCanvas.height = video.videoHeight || 720;
+
+        statusEl.textContent = '카메라 연결됨';
+        statusEl.style.color = '#4caf50';
 
         // 프레임 전송 시작 (약 8fps)
         setInterval(sendFrame, 125);
@@ -44,7 +50,6 @@ async function initCamera() {
         console.warn('브라우저 웹캠 사용 불가, MJPEG 스트림 폴백:', e);
         statusEl.textContent = '카메라 권한 필요';
         statusEl.style.color = '#ff5722';
-        // 폴백: 기존 MJPEG 스트림
         fallbackToMjpeg();
     }
 }
@@ -63,10 +68,15 @@ function fallbackToMjpeg() {
 // ── 프레임 전송 ───────────────────────────────────────
 
 async function sendFrame() {
-    if (isSending || video.readyState < 2) return;
+    if (isSending || video.readyState < 2 || !video.videoWidth) return;
     isSending = true;
 
     try {
+        // 캔버스 크기 보정
+        if (captureCanvas.width !== video.videoWidth) {
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+        }
         // 비디오 프레임 → 캔버스 → JPEG blob
         captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
         const blob = await new Promise(resolve =>
