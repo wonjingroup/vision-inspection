@@ -1,16 +1,149 @@
 /**
  * 메인 검사 화면 로직
+ * - 브라우저 웹캠 → 서버 AI 추론 → 검출 박스 오버레이
  * - /api/status 폴링으로 검사 상태 실시간 갱신
- * - OK/NG 오버레이 + 사운드 트리거
  */
 
 let prevState = 'idle';
 let okShown = false;
 let ngShown = false;
 let activeFaceTab = 'A';
-let statsRefreshTimer = null;
+let latestDetections = [];
+let isSending = false;
 
-// ── 상태 폴링 ──────────────────────────────────────────
+// ── 브라우저 웹캠 초기화 ──────────────────────────────
+
+const video = document.getElementById('video-feed');
+const overlayCanvas = document.getElementById('overlay-canvas');
+const captureCanvas = document.getElementById('capture-canvas');
+const overlayCtx = overlayCanvas.getContext('2d');
+const captureCtx = captureCanvas.getContext('2d');
+
+async function initCamera() {
+    const statusEl = document.getElementById('camera-status');
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' }
+        });
+        video.srcObject = stream;
+        await video.play();
+        statusEl.textContent = '카메라 연결됨';
+        statusEl.style.color = '#4caf50';
+
+        // 캡처 캔버스 크기 설정
+        video.addEventListener('loadedmetadata', () => {
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+        });
+
+        // 프레임 전송 시작 (약 8fps)
+        setInterval(sendFrame, 125);
+        // 오버레이 그리기 (애니메이션)
+        requestAnimationFrame(drawOverlay);
+    } catch (e) {
+        console.warn('브라우저 웹캠 사용 불가, MJPEG 스트림 폴백:', e);
+        statusEl.textContent = '카메라 권한 필요';
+        statusEl.style.color = '#ff5722';
+        // 폴백: 기존 MJPEG 스트림
+        fallbackToMjpeg();
+    }
+}
+
+function fallbackToMjpeg() {
+    const videoArea = video.parentElement;
+    video.style.display = 'none';
+    overlayCanvas.style.display = 'none';
+    const img = document.createElement('img');
+    img.id = 'video-feed-img';
+    img.src = '/api/stream';
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain;';
+    videoArea.appendChild(img);
+}
+
+// ── 프레임 전송 ───────────────────────────────────────
+
+async function sendFrame() {
+    if (isSending || video.readyState < 2) return;
+    isSending = true;
+
+    try {
+        // 비디오 프레임 → 캔버스 → JPEG blob
+        captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+        const blob = await new Promise(resolve =>
+            captureCanvas.toBlob(resolve, 'image/jpeg', 0.7)
+        );
+        if (!blob) { isSending = false; return; }
+
+        const resp = await fetch('/api/frame', { method: 'POST', body: blob });
+        const data = await resp.json();
+
+        latestDetections = data.detections || [];
+        updateUI(data.status);
+    } catch (e) {
+        // 네트워크 오류 무시
+    }
+    isSending = false;
+}
+
+// ── 검출 박스 오버레이 ────────────────────────────────
+
+const DET_COLORS = {
+    face_a: '#00ff00', face_b: '#ffa500',
+    fastener: '#ff0000', clip: '#00c8ff',
+    barcode: '#ffff00', protective_wrap: '#c800ff',
+    black_pad: '#666666', insulate_pad: '#0096c8',
+};
+
+function drawOverlay() {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) { requestAnimationFrame(drawOverlay); return; }
+
+    // 캔버스 크기를 실제 표시 크기에 맞춤
+    const rect = video.getBoundingClientRect();
+    overlayCanvas.width = rect.width;
+    overlayCanvas.height = rect.height;
+
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+    // 비디오→캔버스 좌표 변환 (object-fit: contain 대응)
+    const videoAspect = vw / vh;
+    const canvasAspect = rect.width / rect.height;
+    let sx, sy, sw, sh;
+    if (videoAspect > canvasAspect) {
+        sw = rect.width;
+        sh = rect.width / videoAspect;
+        sx = 0;
+        sy = (rect.height - sh) / 2;
+    } else {
+        sh = rect.height;
+        sw = rect.height * videoAspect;
+        sx = (rect.width - sw) / 2;
+        sy = 0;
+    }
+
+    for (const det of latestDetections) {
+        const [x1, y1, x2, y2] = det.bbox;
+        const dx = sx + (x1 / vw) * sw;
+        const dy = sy + (y1 / vh) * sh;
+        const dw = ((x2 - x1) / vw) * sw;
+        const dh = ((y2 - y1) / vh) * sh;
+
+        const color = DET_COLORS[det.class_name] || '#ccc';
+        overlayCtx.strokeStyle = color;
+        overlayCtx.lineWidth = 2;
+        overlayCtx.strokeRect(dx, dy, dw, dh);
+
+        const label = `${det.class_name} ${Math.round(det.confidence * 100)}%`;
+        overlayCtx.font = '13px sans-serif';
+        overlayCtx.fillStyle = color;
+        overlayCtx.fillText(label, dx, dy - 4);
+    }
+
+    requestAnimationFrame(drawOverlay);
+}
+
+// ── 상태 폴링 (프레임 전송 없을 때 보조) ──────────────
 
 async function pollStatus() {
     try {
@@ -20,15 +153,12 @@ async function pollStatus() {
     } catch (e) {
         document.getElementById('camera-status').textContent = '연결 끊김';
     }
-    setTimeout(pollStatus, 200);
+    setTimeout(pollStatus, 500);
 }
 
 function updateUI(s) {
+    if (!s) return;
     const state = s.state;
-
-    // 카메라 상태
-    document.getElementById('camera-status').textContent =
-        state === 'standby' ? '대기 중' : (state === 'idle' ? '제품 대기' : '검사 중');
 
     // 상태 뱃지
     const badge = document.getElementById('state-badge');
@@ -50,7 +180,7 @@ function updateUI(s) {
     else if (state === 'result_ok') badge.classList.add('state-result-ok');
     else if (state === 'result_ng') badge.classList.add('state-result-ng');
 
-    // 버튼 전환: standby일 때 검사시작, 그 외엔 검사 중단
+    // 버튼 전환
     const btnStart = document.getElementById('btn-start');
     const btnReset = document.getElementById('btn-reset');
     if (state === 'standby') {
@@ -61,7 +191,7 @@ function updateUI(s) {
         btnReset.style.display = '';
     }
 
-    // 경과 시간 (standby에서는 숨김)
+    // 경과 시간
     const elapsed = document.getElementById('elapsed');
     if (state === 'standby') {
         elapsed.textContent = '';
@@ -108,8 +238,6 @@ function updateUI(s) {
     } else if (state !== 'result_ok' && state !== 'result_ng') {
         hideOverlays();
     }
-
-    // OK 상태에서 벗어나면 오버레이 숨기기
     if (state !== 'result_ok' && okShown) {
         hideOverlays();
     }
@@ -156,7 +284,6 @@ function showNg(s) {
     document.getElementById('ok-overlay').classList.remove('active');
     document.getElementById('ng-overlay').classList.add('active');
 
-    // 미달 항목 표시
     const list = document.getElementById('missing-list');
     list.innerHTML = '';
     if (s.missing_parts) {
@@ -231,18 +358,6 @@ async function refreshTodayStats() {
     } catch (e) {}
 }
 
-// ── 데모 뱃지 ──────────────────────────────────────────
-
-async function checkDemo() {
-    try {
-        const resp = await fetch('/api/settings');
-        const s = await resp.json();
-        if (s.demo_mode === '1' || s.demo_mode === 'True') {
-            document.getElementById('demo-badge').style.display = '';
-        }
-    } catch (e) {}
-}
-
 // ── 면 탭 클릭 ─────────────────────────────────────────
 
 document.getElementById('tab-a').addEventListener('click', () => {
@@ -263,7 +378,7 @@ document.getElementById('tab-b').addEventListener('click', () => {
 
 // ── 시작 ───────────────────────────────────────────────
 
+initCamera();
 pollStatus();
 refreshTodayStats();
-checkDemo();
 setInterval(refreshTodayStats, 10000);

@@ -70,6 +70,13 @@ class CameraManager:
     def is_running(self) -> bool:
         return self._running
 
+    def inject_frame(self, frame: np.ndarray):
+        """외부(브라우저 웹캠)에서 받은 프레임 주입."""
+        with self._lock:
+            self._latest_frame = frame
+            self._frame_time = time.time()
+            self._frame_count += 1
+
     def switch_camera(self, camera_index: int, width: int = None,
                       height: int = None):
         self.stop()

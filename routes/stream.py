@@ -1,5 +1,6 @@
-"""MJPEG 스트리밍 + 검사 상태 API."""
+"""MJPEG 스트리밍 + 검사 상태 API + 브라우저 웹캠 프레임 수신."""
 import asyncio
+import time
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -183,3 +184,35 @@ async def reset_inspection(request: Request):
     inspector = request.app.state.inspector
     inspector.reset()
     return {"ok": True}
+
+
+@router.post("/frame")
+async def receive_frame(request: Request):
+    """브라우저 웹캠 프레임 수신 → AI 추론 → 검출 결과 반환."""
+    body = await request.body()
+    nparr = np.frombuffer(body, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if frame is None:
+        return JSONResponse({"error": "invalid frame"}, 400)
+
+    camera_mgr = request.app.state.camera_mgr
+    detector = request.app.state.detector
+    inspector = request.app.state.inspector
+
+    # 프레임을 카메라 매니저에 주입 (기존 파이프라인과 통합)
+    camera_mgr.inject_frame(frame)
+
+    # 직접 추론 실행 (paused 상태가 아닐 때만)
+    detections = []
+    if not detector._paused:
+        detections = detector.detect(frame)
+        inspector.update(detections, frame, time.time())
+
+    status = inspector.get_status()
+    det_list = [{
+        "class_name": d.class_name,
+        "confidence": d.confidence,
+        "bbox": list(d.bbox),
+    } for d in detections]
+
+    return {"detections": det_list, "status": status}
