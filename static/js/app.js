@@ -21,34 +21,31 @@ const captureCtx = captureCanvas.getContext('2d');
 
 async function initCamera() {
     const statusEl = document.getElementById('camera-status');
+    statusEl.textContent = '카메라 연결 중...';
+
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
 
-        // 메타데이터 로드 대기 후 play
-        await new Promise((resolve, reject) => {
-            video.onloadedmetadata = resolve;
-            video.onerror = reject;
-            setTimeout(reject, 5000); // 5초 타임아웃
+        // 비디오 준비 대기
+        await new Promise((resolve) => {
+            if (video.readyState >= 1) { resolve(); return; }
+            video.addEventListener('loadedmetadata', resolve, { once: true });
         });
-        await video.play();
 
-        // 캡처 캔버스 크기 설정
-        captureCanvas.width = video.videoWidth || 1280;
-        captureCanvas.height = video.videoHeight || 720;
+        video.play();
 
-        statusEl.textContent = '카메라 연결됨';
+        captureCanvas.width = video.videoWidth || 640;
+        captureCanvas.height = video.videoHeight || 480;
+
+        statusEl.textContent = '카메라 연결됨 (' + video.videoWidth + 'x' + video.videoHeight + ')';
         statusEl.style.color = '#4caf50';
 
-        // 프레임 전송 시작 (약 8fps)
         setInterval(sendFrame, 125);
-        // 오버레이 그리기 (애니메이션)
         requestAnimationFrame(drawOverlay);
     } catch (e) {
-        console.warn('브라우저 웹캠 사용 불가, MJPEG 스트림 폴백:', e);
-        statusEl.textContent = '카메라 권한 필요';
+        console.error('카메라 오류:', e);
+        statusEl.textContent = '카메라 오류: ' + (e.message || e.name || '알 수 없음');
         statusEl.style.color = '#ff5722';
         fallbackToMjpeg();
     }

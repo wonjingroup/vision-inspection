@@ -68,7 +68,7 @@ input:focus, select:focus { outline: 2px solid #64b5f6; border-color: transparen
     background: #000;
     position: relative;
 }
-.video-area img {
+.video-area img, .video-area video {
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
