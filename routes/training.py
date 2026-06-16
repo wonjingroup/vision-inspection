@@ -16,6 +16,7 @@ from config import BASE_DIR, MODELS_DIR, TRAINING_WORK_DIR
 router = APIRouter(tags=["training"])
 
 DATASET_DIR = BASE_DIR / "dataset"
+COMMON_DIR = DATASET_DIR / "common"  # 공용 이미지 디렉토리
 
 # 학습 상태 (전역)
 _training_state = {
@@ -77,15 +78,43 @@ async def get_image(product_code: str, filename: str):
 
 @router.get("/training/images")
 async def list_images(product_code: str = "default"):
-    """제품별 수집 이미지 목록."""
+    """제품별 수집 이미지 + 공용 이미지 목록."""
+    # 공용 + 제품 클래스 병합
+    class_names = _merged_classes(product_code)
+
+    images = []
+
+    # 1) 공용 이미지 (common) — product_code가 common이 아닌 경우만
+    if product_code != "common":
+        common_img_dir = COMMON_DIR / "images"
+        common_lbl_dir = COMMON_DIR / "labels"
+        common_img_dir.mkdir(parents=True, exist_ok=True)
+        for f in sorted(common_img_dir.glob("*.jpg")):
+            label_file = common_lbl_dir / f"{f.stem}.txt"
+            has_label = label_file.exists() and label_file.read_text().strip()
+            label_count = 0
+            label_classes = []
+            if has_label:
+                for line in label_file.read_text().strip().split("\n"):
+                    parts = line.strip().split()
+                    if len(parts) >= 5:
+                        label_count += 1
+                        cid = int(parts[0])
+                        if cid < len(class_names):
+                            label_classes.append(class_names[cid])
+            images.append({
+                "filename": f.name,
+                "url": f"/api/training/images/common/{f.name}",
+                "has_label": bool(has_label),
+                "label_count": label_count,
+                "label_classes": label_classes,
+                "source": "common",
+            })
+
+    # 2) 제품별 이미지
     img_dir = _product_dir(product_code) / "images"
     lbl_dir = _product_dir(product_code) / "labels"
     img_dir.mkdir(parents=True, exist_ok=True)
-
-    classes_path = _product_dir(product_code) / "classes.txt"
-    class_names = _load_classes(classes_path)
-
-    images = []
     for f in sorted(img_dir.glob("*.jpg")):
         label_file = lbl_dir / f"{f.stem}.txt"
         has_label = label_file.exists() and label_file.read_text().strip()
@@ -105,6 +134,7 @@ async def list_images(product_code: str = "default"):
             "has_label": bool(has_label),
             "label_count": label_count,
             "label_classes": label_classes,
+            "source": "product",
         })
     return images
 
@@ -222,8 +252,7 @@ async def get_labels(product_code: str, filename: str):
 
 @router.get("/training/classes")
 async def get_classes(product_code: str = "default"):
-    classes_path = _product_dir(product_code) / "classes.txt"
-    return {"class_names": _load_classes(classes_path)}
+    return {"class_names": _merged_classes(product_code)}
 
 
 @router.post("/training/classes")
@@ -241,30 +270,35 @@ async def save_classes(request: Request, product_code: str = "default"):
 
 @router.get("/training/stats")
 async def dataset_stats(product_code: str = "default"):
-    pdir = _product_dir(product_code)
-    img_dir = pdir / "images"
-    lbl_dir = pdir / "labels"
-    img_dir.mkdir(parents=True, exist_ok=True)
-    lbl_dir.mkdir(parents=True, exist_ok=True)
-
-    classes_path = pdir / "classes.txt"
-    class_names = _load_classes(classes_path)
-
-    total_images = len(list(img_dir.glob("*.jpg")))
+    class_names = _merged_classes(product_code)
+    total_images = 0
     labeled_images = 0
     class_counts = {name: 0 for name in class_names}
 
-    for lbl_file in lbl_dir.glob("*.txt"):
-        content = lbl_file.read_text().strip()
-        if not content:
-            continue
-        labeled_images += 1
-        for line in content.split("\n"):
-            parts = line.strip().split()
-            if len(parts) >= 5:
-                cls_id = int(parts[0])
-                if cls_id < len(class_names):
-                    class_counts[class_names[cls_id]] = class_counts.get(class_names[cls_id], 0) + 1
+    # 공용 + 제품별 디렉토리 순회
+    dirs = []
+    if product_code != "common":
+        dirs.append(COMMON_DIR)
+    dirs.append(_product_dir(product_code))
+
+    for pdir in dirs:
+        img_dir = pdir / "images"
+        lbl_dir = pdir / "labels"
+        img_dir.mkdir(parents=True, exist_ok=True)
+        lbl_dir.mkdir(parents=True, exist_ok=True)
+
+        total_images += len(list(img_dir.glob("*.jpg")))
+        for lbl_file in lbl_dir.glob("*.txt"):
+            content = lbl_file.read_text().strip()
+            if not content:
+                continue
+            labeled_images += 1
+            for line in content.split("\n"):
+                parts = line.strip().split()
+                if len(parts) >= 5:
+                    cls_id = int(parts[0])
+                    if cls_id < len(class_names):
+                        class_counts[class_names[cls_id]] = class_counts.get(class_names[cls_id], 0) + 1
 
     return {
         "total_images": total_images,
@@ -289,16 +323,20 @@ async def start_training(request: Request):
     imgsz = body.get("imgsz", 640)
     batch = body.get("batch", 8)
 
-    pdir = _product_dir(product_code)
-    img_dir = pdir / "images"
-    lbl_dir = pdir / "labels"
-
-    labeled = [f for f in img_dir.glob("*.jpg")
-               if (lbl_dir / f"{f.stem}.txt").exists()
-               and (lbl_dir / f"{f.stem}.txt").read_text().strip()]
-    if len(labeled) < 5:
+    # 공용 + 제품별 라벨링 이미지 수 확인
+    total_labeled = 0
+    for d in [COMMON_DIR, _product_dir(product_code)]:
+        img_d = d / "images"
+        lbl_d = d / "labels"
+        if img_d.exists():
+            total_labeled += sum(
+                1 for f in img_d.glob("*.jpg")
+                if (lbl_d / f"{f.stem}.txt").exists()
+                and (lbl_d / f"{f.stem}.txt").read_text().strip()
+            )
+    if total_labeled < 1:
         return JSONResponse(
-            {"error": f"라벨링된 이미지가 {len(labeled)}개뿐입니다. 최소 5개 이상 필요합니다."},
+            {"error": "라벨링된 이미지가 없습니다. 최소 1개 이상 필요합니다."},
             status_code=400,
         )
 
@@ -324,10 +362,7 @@ def _run_training(app, product_code: str, epochs: int, imgsz: int, batch: int):
 
     try:
         pdir = _product_dir(product_code)
-        img_dir = pdir / "images"
-        lbl_dir = pdir / "labels"
-        classes_path = pdir / "classes.txt"
-        class_names = _load_classes(classes_path)
+        class_names = _merged_classes(product_code)
 
         # 한글 경로 우회
         safe_code = product_code.replace("-", "").replace(" ", "_")[:20]
@@ -342,16 +377,26 @@ def _run_training(app, product_code: str, epochs: int, imgsz: int, batch: int):
             for f in d.glob("*"):
                 f.unlink()
 
+        # 공용 + 제품별 라벨링 이미지 수집
         labeled = []
-        for f in sorted(img_dir.glob("*.jpg")):
-            lbl = lbl_dir / f"{f.stem}.txt"
-            if lbl.exists() and lbl.read_text().strip():
-                labeled.append((f, lbl))
+        for src_dir in [COMMON_DIR, pdir]:
+            img_dir = src_dir / "images"
+            lbl_dir = src_dir / "labels"
+            if not img_dir.exists():
+                continue
+            for f in sorted(img_dir.glob("*.jpg")):
+                lbl = lbl_dir / f"{f.stem}.txt"
+                if lbl.exists() and lbl.read_text().strip():
+                    labeled.append((f, lbl))
 
-        # temporal split (wonjin-qa 패턴)
-        split_idx = max(1, int(len(labeled) * 0.8))
-        train_set = labeled[:split_idx]
-        val_set = labeled[split_idx:] if split_idx < len(labeled) else labeled[-1:]
+        # temporal split (소량 데이터 대응: 3장 이하면 전부 train=val로 공유)
+        if len(labeled) <= 3:
+            train_set = labeled
+            val_set = labeled  # 동일 데이터로 검증
+        else:
+            split_idx = max(1, int(len(labeled) * 0.8))
+            train_set = labeled[:split_idx]
+            val_set = labeled[split_idx:] if split_idx < len(labeled) else labeled[-1:]
 
         _update_state(message=f"학습:{len(train_set)}장, 검증:{len(val_set)}장 복사 중...")
 
@@ -414,3 +459,14 @@ def _load_classes(path: Path) -> list[str]:
     if path.exists():
         return [l.strip() for l in path.read_text().strip().split("\n") if l.strip()]
     return []
+
+
+def _merged_classes(product_code: str) -> list[str]:
+    """공용 클래스 + 제품별 클래스 병합 (중복 제거, 순서 유지)."""
+    common_cls = _load_classes(COMMON_DIR / "classes.txt")
+    product_cls = _load_classes(_product_dir(product_code) / "classes.txt")
+    merged = list(common_cls)
+    for c in product_cls:
+        if c not in merged:
+            merged.append(c)
+    return merged
