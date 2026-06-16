@@ -235,35 +235,15 @@ function renderImageGrid() {
 }
 
 async function captureFrame() {
-    if (!cameraReady || trainingVideo.readyState < 2) {
-        // 폴백: 서버 카메라 사용
-        try {
-            const resp = await fetch(`/api/training/capture?product_code=${encodeURIComponent(selectedProductCode)}`, { method: 'POST' });
-            const data = await resp.json();
-            if (data.error) { alert(data.error); return; }
-            await loadImages();
-            await loadDatasetStats();
-            selectImage({ filename: data.filename, url: data.url, width: data.width, height: data.height });
-        } catch (e) { alert('촬영 오류: ' + e.message); }
-        return;
-    }
-
     try {
-        // 브라우저 웹캠에서 캡처
-        const capCanvas = document.createElement('canvas');
-        capCanvas.width = trainingVideo.videoWidth;
-        capCanvas.height = trainingVideo.videoHeight;
-        capCanvas.getContext('2d').drawImage(trainingVideo, 0, 0);
-        const blob = await new Promise(r => capCanvas.toBlob(r, 'image/jpeg', 0.95));
-        if (!blob) { alert('캡처 실패'); return; }
-
-        const formData = new FormData();
-        formData.append('file', blob, 'capture.jpg');
-
-        const resp = await fetch(`/api/training/upload?product_code=${encodeURIComponent(selectedProductCode)}`, {
-            method: 'POST', body: formData
-        });
+        // 서버 OpenCV 카메라 우선 시도 (고해상도)
+        const resp = await fetch(`/api/training/capture?product_code=${encodeURIComponent(selectedProductCode)}`, { method: 'POST' });
         const data = await resp.json();
+        if (data.error && cameraReady && trainingVideo.readyState >= 2) {
+            // 서버 카메라 실패 시 브라우저 웹캠 폴백
+            await captureFromBrowser();
+            return;
+        }
         if (data.error) { alert(data.error); return; }
         await loadImages();
         await loadDatasetStats();
@@ -271,6 +251,26 @@ async function captureFrame() {
     } catch (e) {
         alert('촬영 오류: ' + e.message);
     }
+}
+
+async function captureFromBrowser() {
+    const capCanvas = document.createElement('canvas');
+    capCanvas.width = trainingVideo.videoWidth;
+    capCanvas.height = trainingVideo.videoHeight;
+    capCanvas.getContext('2d').drawImage(trainingVideo, 0, 0);
+    const blob = await new Promise(r => capCanvas.toBlob(r, 'image/jpeg', 0.95));
+    if (!blob) { alert('캡처 실패'); return; }
+
+    const formData = new FormData();
+    formData.append('file', blob, 'capture.jpg');
+    const resp = await fetch(`/api/training/upload?product_code=${encodeURIComponent(selectedProductCode)}`, {
+        method: 'POST', body: formData
+    });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    await loadImages();
+    await loadDatasetStats();
+    selectImage({ filename: data.filename, url: data.url, width: data.width, height: data.height });
 }
 
 async function deleteImage(filename, source) {

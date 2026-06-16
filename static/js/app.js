@@ -23,11 +23,20 @@ async function initCamera() {
     const statusEl = document.getElementById('camera-status');
     statusEl.textContent = '카메라 연결 중...';
 
+    // 로컬 실행 시 → MJPEG 스트림 (OpenCV 고해상도)
+    // 클라우드 시 → 브라우저 웹캠
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (isLocal) {
+        fallbackToMjpeg();
+        statusEl.textContent = '카메라 연결됨 (1280x720)';
+        statusEl.style.color = '#4caf50';
+        return;
+    }
+
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
 
-        // 비디오 준비 대기
         await new Promise((resolve) => {
             if (video.readyState >= 1) { resolve(); return; }
             video.addEventListener('loadedmetadata', resolve, { once: true });

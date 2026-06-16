@@ -306,7 +306,7 @@
 
             <!-- YOLO 학습 -->
             <div class="card" style="padding:14px;">
-                <div class="panel-title">YOLO 학습</div>
+                <div class="panel-title">YOLO 학습 (yolov8s / 1280px)</div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
                     <div class="form-group" style="margin:0;">
                         <label>에포크</label>
@@ -314,7 +314,7 @@
                     </div>
                     <div class="form-group" style="margin:0;">
                         <label>배치</label>
-                        <input type="number" id="train-batch" value="8" min="1" max="32">
+                        <input type="number" id="train-batch" value="4" min="1" max="32">
                     </div>
                 </div>
                 <button class="btn-success" style="width:100%;" id="train-btn" onclick="startTraining()">학습 시작</button>
@@ -373,6 +373,6 @@
         </div>
     </div>
 
-    <script src="/static/js/training.js?v=7"></script>
+    <script src="/static/js/training.js?v=8"></script>
 </body>
 </html>

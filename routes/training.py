@@ -444,14 +444,26 @@ def _run_training(app, product_code: str, epochs: int, imgsz: int, batch: int):
         _update_state(status="training", message="YOLO 학습 시작...")
 
         from ultralytics import YOLO
-        model = YOLO("yolov8n.pt")
+
+        # 가이드: 경량화보다 성능 우선 — yolov8s + imgsz 1280
+        model = YOLO("yolov8s.pt")
+
+        # 학습 진행률 콜백
+        def on_train_epoch_end(trainer):
+            epoch = trainer.epoch + 1
+            total = trainer.epochs
+            progress = int(epoch / total * 100)
+            _update_state(epoch=epoch, progress=progress,
+                          message=f"학습 중... {epoch}/{total} 에포크")
+
+        model.add_callback("on_train_epoch_end", on_train_epoch_end)
 
         model.train(
             data=str(yaml_path),
             epochs=epochs, imgsz=imgsz, batch=batch,
             project=str(work_dir / "runs"), name="train", exist_ok=True,
             verbose=True,
-            fliplr=0.0, flipud=0.0,  # LH/RH 구분을 위해 flip 비활성화
+            fliplr=0.0, flipud=0.0,  # LH/RH 구분을 위해 flip 비활성화 (가이드 §3.2)
             mosaic=1.0, degrees=15.0, translate=0.1, scale=0.3,
         )
 
