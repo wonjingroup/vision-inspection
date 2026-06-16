@@ -23,10 +23,18 @@
     <!-- 메인 검사 영역 -->
     <div class="inspection-container">
         <!-- 비디오 (브라우저 웹캠 + 검출 오버레이) -->
-        <div class="video-area" style="position:relative;">
-            <video id="video-feed" autoplay playsinline muted></video>
-            <canvas id="overlay-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+        <div class="video-area" style="position:relative;overflow:hidden;">
+            <div id="zoom-wrapper" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;transition:transform 0.2s;">
+                <video id="video-feed" autoplay playsinline muted></video>
+                <canvas id="overlay-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+            </div>
             <canvas id="capture-canvas" style="display:none;"></canvas>
+            <div class="zoom-controls">
+                <button onclick="zoomIn()">+</button>
+                <span id="zoom-level">1.0x</span>
+                <button onclick="zoomOut()">-</button>
+                <button onclick="zoomReset()" style="font-size:11px;">reset</button>
+            </div>
         </div>
 
         <!-- 사이드 패널 -->
@@ -116,6 +124,6 @@
     </div>
 
     <script src="/static/js/sounds.js?v=3"></script>
-    <script src="/static/js/app.js?v=6"></script>
+    <script src="/static/js/app.js?v=7"></script>
 </body>
 </html>

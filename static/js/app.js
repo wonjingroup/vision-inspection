@@ -383,6 +383,38 @@ document.getElementById('tab-b').addEventListener('click', () => {
     document.getElementById('tab-a').classList.remove('active');
 });
 
+// ── 카메라 줌 ─────────────────────────────────────────
+
+let currentZoom = 1.0;
+const zoomWrapper = document.getElementById('zoom-wrapper');
+
+function zoomIn() {
+    currentZoom = Math.min(currentZoom + 0.5, 5.0);
+    applyZoom();
+}
+
+function zoomOut() {
+    currentZoom = Math.max(currentZoom - 0.5, 1.0);
+    applyZoom();
+}
+
+function zoomReset() {
+    currentZoom = 1.0;
+    applyZoom();
+}
+
+function applyZoom() {
+    zoomWrapper.style.transform = `scale(${currentZoom})`;
+    document.getElementById('zoom-level').textContent = currentZoom.toFixed(1) + 'x';
+}
+
+// 마우스 휠 줌
+document.querySelector('.video-area').addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (e.deltaY < 0) zoomIn();
+    else zoomOut();
+}, { passive: false });
+
 // ── 시작 ───────────────────────────────────────────────
 
 initCamera();
