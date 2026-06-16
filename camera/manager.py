@@ -119,10 +119,7 @@ class CameraManager:
     def _generate_synthetic_frame(self) -> np.ndarray:
         """카메라 없는 환경용 합성 프레임 생성."""
         frame = np.zeros((self._height, self._width, 3), dtype=np.uint8)
-        frame[:] = (40, 40, 40)  # 어두운 회색 배경
-        cv2.putText(frame, "DEMO MODE - No Camera",
-                    (self._width // 2 - 200, self._height // 2),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (100, 100, 100), 2)
+        frame[:] = (30, 30, 30)
         return frame
 
     def _capture_loop(self):
