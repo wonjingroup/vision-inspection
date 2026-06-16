@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>통계 - 비전검사</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { overflow: auto; }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <span class="nav-brand">VISION QA</span>
+        <a href="/">검사</a>
+        <a href="/products">제품관리</a>
+        <a href="/stats" class="active">통계</a>
+        <a href="/training">AI 학습</a>
+    </nav>
+
+    <div class="page-container">
+        <h1 class="page-title">검사 통계</h1>
+
+        <!-- 오늘 요약 -->
+        <div class="stats-header">
+            <div class="stats-card">
+                <div class="value" id="s-total" style="color:#64b5f6;">0</div>
+                <div class="label">총 검사</div>
+            </div>
+            <div class="stats-card">
+                <div class="value" id="s-ok" style="color:#4caf50;">0</div>
+                <div class="label">OK</div>
+            </div>
+            <div class="stats-card">
+                <div class="value" id="s-ng" style="color:#f44336;">0</div>
+                <div class="label">NG</div>
+            </div>
+            <div class="stats-card">
+                <div class="value" id="s-rate" style="color:#ffa726;">0%</div>
+                <div class="label">양품률</div>
+            </div>
+        </div>
+
+        <!-- 날짜 선택 + 차트 -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">일별 추이</span>
+                <div class="date-picker-row">
+                    <input type="date" id="date-start">
+                    <span style="color:#888;">~</span>
+                    <input type="date" id="date-end">
+                    <button class="btn-primary btn-sm" onclick="loadChart()">조회</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="chart"></canvas>
+            </div>
+        </div>
+
+        <!-- 검사 이력 -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">검사 이력</span>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="date" id="hist-date" onchange="loadHistory()">
+                    <select id="hist-result" onchange="loadHistory()">
+                        <option value="">전체</option>
+                        <option value="OK">OK</option>
+                        <option value="NG">NG</option>
+                    </select>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>시간</th>
+                        <th>제품</th>
+                        <th>결과</th>
+                        <th>검사시간</th>
+                        <th>미달 항목</th>
+                        <th>사진</th>
+                    </tr>
+                </thead>
+                <tbody id="hist-tbody"></tbody>
+            </table>
+            <div style="text-align:center; padding:12px;">
+                <button class="btn-sm" style="background:#333; color:#aaa;" id="load-more-btn"
+                        onclick="loadMore()">더 보기</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/stats.js"></script>
+</body>
+</html>

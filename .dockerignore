@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+data/inspection.db
+data/photos
+dataset/*/images
+models/*.pt
+train_work
+*.md

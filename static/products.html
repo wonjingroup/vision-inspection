@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제품 관리 - 비전검사</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { overflow: auto; }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <span class="nav-brand">VISION QA</span>
+        <a href="/">검사</a>
+        <a href="/products" class="active">제품관리</a>
+        <a href="/stats">통계</a>
+        <a href="/training">AI 학습</a>
+    </nav>
+
+    <div class="page-container">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+            <h1 class="page-title">제품 관리</h1>
+            <button class="btn-primary" onclick="showAddProduct()">+ 제품 추가</button>
+        </div>
+
+        <!-- 제품 목록 -->
+        <div id="products-list"></div>
+
+        <!-- 부자재 편집 영역 -->
+        <div id="parts-editor" class="card" style="display:none;">
+            <div class="card-header">
+                <span class="card-title" id="parts-product-name">부자재 설정</span>
+                <button class="btn-primary btn-sm" onclick="showAddPart()">+ 부자재 추가</button>
+            </div>
+
+            <div class="face-tabs" style="margin-bottom:16px;">
+                <div class="face-tab active" id="pe-tab-a" onclick="switchPartsTab('A')">A면 (앞)</div>
+                <div class="face-tab" id="pe-tab-b" onclick="switchPartsTab('B')">B면 (뒤)</div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>부자재 종류</th>
+                        <th>표시명</th>
+                        <th>면</th>
+                        <th>필요 수량</th>
+                        <th>YOLO 클래스명</th>
+                        <th>신뢰도</th>
+                        <th>작업</th>
+                    </tr>
+                </thead>
+                <tbody id="parts-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 제품 추가/수정 모달 -->
+    <div class="modal-backdrop" id="product-modal">
+        <div class="modal">
+            <div class="modal-title" id="product-modal-title">제품 추가</div>
+            <input type="hidden" id="pm-id">
+            <div class="form-group">
+                <label>품명</label>
+                <input type="text" id="pm-name" placeholder="예: RR PILLAR TRIM LH OVS">
+            </div>
+            <div class="form-group">
+                <label>품번</label>
+                <input type="text" id="pm-code" placeholder="예: 85851-DE000OVS">
+            </div>
+            <div class="form-group">
+                <label>차종</label>
+                <input type="text" id="pm-car" placeholder="예: SP3">
+            </div>
+            <div class="form-group">
+                <label>YOLO 모델 파일 (models/ 기준)</label>
+                <input type="text" id="pm-model" placeholder="예: sp3_lh.pt">
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div class="form-group">
+                    <label>A면 YOLO 클래스명</label>
+                    <input type="text" id="pm-face-a" placeholder="예: face_a">
+                </div>
+                <div class="form-group">
+                    <label>B면 YOLO 클래스명</label>
+                    <input type="text" id="pm-face-b" placeholder="예: face_b">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn-danger" onclick="closeProductModal()">취소</button>
+                <button class="btn-primary" onclick="saveProduct()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 부자재 추가/수정 모달 -->
+    <div class="modal-backdrop" id="part-modal">
+        <div class="modal">
+            <div class="modal-title" id="part-modal-title">부자재 추가</div>
+            <input type="hidden" id="pt-id">
+            <div class="form-group">
+                <label>부자재 종류 (영문 ID)</label>
+                <input type="text" id="pt-type" placeholder="예: fastener, clip, barcode">
+            </div>
+            <div class="form-group">
+                <label>표시명 (한글)</label>
+                <input type="text" id="pt-display" placeholder="예: 화스너, 클립, 바코드">
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div class="form-group">
+                    <label>면</label>
+                    <select id="pt-face">
+                        <option value="A">A면 (앞)</option>
+                        <option value="B">B면 (뒤)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>필요 수량</label>
+                    <input type="number" id="pt-count" min="1" value="1">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>YOLO 클래스명 (모델의 검출 클래스명)</label>
+                <input type="text" id="pt-yolo" placeholder="예: fastener, clip">
+            </div>
+            <div class="form-group">
+                <label>신뢰도 임계값 (0~1)</label>
+                <input type="number" id="pt-conf" min="0" max="1" step="0.05" value="0.5">
+            </div>
+            <div class="form-actions">
+                <button class="btn-danger" onclick="closePartModal()">취소</button>
+                <button class="btn-primary" onclick="savePart()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/products.js"></script>
+</body>
+</html>

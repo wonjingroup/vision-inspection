@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 학습 - 비전검사</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { overflow: auto; }
+
+        .training-layout {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 16px;
+            height: calc(100vh - 44px);
+            padding: 16px;
+        }
+
+        /* 캔버스 영역 */
+        .canvas-area {
+            background: #111;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .canvas-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            background: #16213e;
+            border-bottom: 1px solid #333;
+            flex-wrap: wrap;
+        }
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .toolbar-sep {
+            width: 1px; height: 24px; background: #444; margin: 0 4px;
+        }
+        .canvas-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        #label-canvas { cursor: crosshair; max-width: 100%; max-height: 100%; }
+        .canvas-hint {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #555;
+            font-size: 18px;
+            line-height: 2;
+        }
+        .canvas-hint b { color: #888; }
+        .canvas-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 14px;
+            background: #0d1117;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* 클래스 버튼 */
+        .class-btn {
+            padding: 5px 14px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 2px solid transparent;
+            color: #fff;
+        }
+        .class-btn.active { border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.4); transform: scale(1.05); }
+
+        /* 마킹 모드 버튼 */
+        .shape-btn {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            background: #2a2a4a;
+            color: #aaa;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+        .shape-btn.active { background: #1976d2; color: #fff; border-color: #64b5f6; }
+        .shape-btn:hover { background: #3a3a5a; }
+        .class-btn .cnt { font-size: 10px; opacity: 0.7; margin-left: 2px; }
+
+        /* 제품 선택 */
+        .product-selector {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .product-chip {
+            padding: 6px 14px;
+            border-radius: 8px;
+            background: #2a2a4a;
+            font-size: 13px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.15s;
+        }
+        .product-chip:hover { background: #3a3a5a; }
+        .product-chip.active { border-color: #64b5f6; background: #1a3a5a; color: #64b5f6; }
+
+        /* 우측 패널 */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        /* 클래스별 진행률 */
+        .class-progress { margin-top: 8px; }
+        .class-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 0;
+            font-size: 13px;
+        }
+        .class-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .class-bar-bg {
+            flex: 1;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .class-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+        .class-count { font-size: 12px; color: #888; min-width: 30px; text-align: right; }
+        .class-count.ok { color: #4caf50; }
+        .class-count.low { color: #f44336; }
+
+        /* 이미지 그리드 */
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+        .image-thumb {
+            aspect-ratio: 4/3;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            position: relative;
+        }
+        .image-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .image-thumb.active { border-color: #64b5f6; }
+        .image-thumb .badge-lbl {
+            position: absolute; top: 1px; right: 1px;
+            font-size: 9px; font-weight: 700;
+            padding: 1px 4px; border-radius: 4px; color: #fff;
+        }
+        .image-thumb .badge-lbl.done { background: #2e7d32; }
+        .image-thumb .badge-lbl.empty { background: #c62828; }
+        .image-thumb .delete-btn {
+            position: absolute; top: 2px; right: 2px;
+            background: rgba(200,0,0,0.85); color: #fff;
+            border: none; border-radius: 3px; font-size: 11px;
+            padding: 1px 5px; cursor: pointer; display: none;
+            font-weight: 700;
+        }
+        .image-thumb:hover .delete-btn { display: block; }
+
+        /* 현재 라벨 목록 */
+        .label-list { list-style: none; }
+        .label-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 8px; margin-bottom: 3px;
+            border-radius: 5px; font-size: 13px;
+            background: rgba(255,255,255,0.04);
+            cursor: pointer;
+        }
+        .label-item:hover { background: rgba(255,255,255,0.1); }
+        .label-item.highlight { background: rgba(100,181,246,0.2); }
+        .label-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+        .label-item .del { margin-left: auto; background: none; color: #f44336; border: none; cursor: pointer; font-size: 14px; }
+
+        /* 단축키 안내 */
+        .shortcut-list {
+            font-size: 11px; color: #666; line-height: 1.8;
+        }
+        .shortcut-list kbd {
+            background: #333; border: 1px solid #555; border-radius: 3px;
+            padding: 1px 5px; font-size: 10px; color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <span class="nav-brand">VISION QA</span>
+        <a href="/">검사</a>
+        <a href="/products">제품관리</a>
+        <a href="/stats">통계</a>
+        <a href="/training" class="active">AI 학습</a>
+    </nav>
+
+    <div class="training-layout">
+        <!-- 왼쪽: 캔버스 -->
+        <div class="canvas-area">
+            <div class="canvas-toolbar">
+                <!-- 제품 선택 -->
+                <div class="toolbar-group">
+                    <span style="color:#888; font-size:12px;">제품:</span>
+                    <div class="product-selector" id="product-selector"></div>
+                </div>
+
+                <div class="toolbar-sep"></div>
+
+                <!-- 캡처/저장 -->
+                <div class="toolbar-group">
+                    <button class="btn-primary btn-sm" onclick="captureFrame()" title="카메라 촬영 (Space)">촬영</button>
+                    <button class="btn-sm" style="background:#c62828;color:#fff;" onclick="undoLabel()" title="실행취소 (Ctrl+Z)">실행취소</button>
+                    <button class="btn-success btn-sm" onclick="saveLabels()" title="라벨 저장 (Ctrl+S)">저장</button>
+                </div>
+
+                <div class="toolbar-sep"></div>
+
+                <!-- 마킹 모드 -->
+                <div class="toolbar-group">
+                    <span style="color:#888; font-size:12px;">마킹:</span>
+                    <button class="shape-btn active" data-shape="box" onclick="setShape('box')" title="박스형 (드래그)">▭ 박스</button>
+                    <button class="shape-btn" data-shape="circle" onclick="setShape('circle')" title="원형 (중심→반지름 드래그)">○ 원형</button>
+                    <button class="shape-btn" data-shape="freeform" onclick="setShape('freeform')" title="자유형 (클릭으로 점 찍기, 더블클릭/우클릭으로 완료)">◇ 자유형</button>
+                </div>
+
+                <div class="toolbar-sep"></div>
+
+                <!-- 클래스 선택 -->
+                <div class="toolbar-group">
+                    <span style="color:#888; font-size:12px;">클래스:</span>
+                    <div id="class-buttons"></div>
+                    <button class="btn-sm" style="background:#555;color:#ddd;font-size:11px;" onclick="showAddClass()">+</button>
+                </div>
+            </div>
+
+            <div class="canvas-wrapper">
+                <canvas id="label-canvas"></canvas>
+                <div class="canvas-hint" id="canvas-hint">
+                    <b>1.</b> 위에서 제품을 선택하세요<br>
+                    <b>2.</b> "촬영" 버튼으로 제품 사진을 찍으세요<br>
+                    <b>3.</b> 마킹 모드(박스/원형/자유형)와 클래스를 선택하고 마킹하세요<br>
+                    <b>4.</b> "저장"을 눌러 라벨을 저장하세요
+                </div>
+            </div>
+
+            <div class="canvas-status">
+                <span id="status-file">파일: -</span>
+                <span id="status-labels">라벨: 0개</span>
+                <span id="status-class">클래스: -</span>
+                <span id="status-saved" style="color:#4caf50;"></span>
+            </div>
+        </div>
+
+        <!-- 오른쪽: 패널 -->
+        <div class="right-panel">
+            <!-- 클래스별 학습 현황 -->
+            <div class="card" style="padding:14px;">
+                <div class="panel-title">클래스별 학습 현황 (최소 5개)</div>
+                <div class="class-progress" id="class-progress">
+                    <div style="color:#666; font-size:13px;">클래스를 등록하세요</div>
+                </div>
+            </div>
+
+            <!-- 수집 이미지 -->
+            <div class="card" style="padding:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div class="panel-title" style="margin:0;">수집 이미지</div>
+                    <span style="font-size:11px; color:#666;">
+                        <span id="img-count">0장</span> —
+                        라벨 <b id="ds-labeled" style="color:#4caf50;">0</b> /
+                        미라벨 <b id="ds-unlabeled" style="color:#f44336;">0</b>
+                    </span>
+                </div>
+                <div class="image-grid" id="image-grid"></div>
+            </div>
+
+            <!-- 현재 라벨 -->
+            <div class="card" style="padding:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div class="panel-title" style="margin:0;">현재 이미지 라벨</div>
+                    <button class="btn-sm" style="background:#c62828;color:#fff;font-size:11px;padding:2px 8px;"
+                            onclick="undoLabel()">실행취소 (Ctrl+Z)</button>
+                </div>
+                <ul class="label-list" id="label-list">
+                    <li class="label-item" style="color:#666;">이미지를 선택하세요</li>
+                </ul>
+            </div>
+
+            <!-- YOLO 학습 -->
+            <div class="card" style="padding:14px;">
+                <div class="panel-title">YOLO 학습</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+                    <div class="form-group" style="margin:0;">
+                        <label>에포크</label>
+                        <input type="number" id="train-epochs" value="100" min="10" max="500">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label>배치</label>
+                        <input type="number" id="train-batch" value="8" min="1" max="32">
+                    </div>
+                </div>
+                <button class="btn-success" style="width:100%;" id="train-btn" onclick="startTraining()">학습 시작</button>
+                <div id="train-status" style="margin-top:8px; font-size:13px; color:#888;"></div>
+                <div class="progress-bar" id="train-progress-bar" style="display:none; margin-top:6px;">
+                    <div class="progress-fill" id="train-progress-fill" style="width:0%;"></div>
+                </div>
+            </div>
+
+            <!-- 단축키 -->
+            <div class="card" style="padding:14px;">
+                <div class="panel-title">단축키</div>
+                <div class="shortcut-list">
+                    <kbd>Space</kbd> 촬영<br>
+                    <kbd>Ctrl+Z</kbd> 실행취소<br>
+                    <kbd>Ctrl+S</kbd> 라벨 저장<br>
+                    <kbd>Esc</kbd> 자유형 그리기 취소<br>
+                    <kbd>더블클릭/우클릭</kbd> 자유형 완료
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 클래스 추가 모달 -->
+    <div class="modal-backdrop" id="class-modal">
+        <div class="modal" style="min-width:380px;">
+            <div class="modal-title">클래스 추가</div>
+            <div class="form-group">
+                <label>클래스명 (영문, 공백 없이)</label>
+                <input type="text" id="new-class-name" placeholder="예: fastener"
+                       onkeydown="if(event.key==='Enter')addClass()">
+            </div>
+            <div style="font-size:12px; color:#888; margin-bottom:8px;">
+                <b>제품 인식용 (필수)</b><br>
+                &nbsp; face_a — 제품 앞면 전체<br>
+                &nbsp; face_b — 제품 뒷면 전체<br>
+                <b>부자재 (검사 대상)</b><br>
+                &nbsp; fastener — 화스너 &nbsp;|&nbsp; clip — 클립<br>
+                &nbsp; barcode — 바코드 &nbsp;|&nbsp; protective_wrap — 보호랩<br>
+                &nbsp; black_pad — 검정패드 &nbsp;|&nbsp; insulate_pad — 신슐레이트패드
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:12px;">
+                <button class="btn-sm" style="background:#333;color:#aaa;font-size:11px;" onclick="quickAdd('face_a')">face_a</button>
+                <button class="btn-sm" style="background:#333;color:#aaa;font-size:11px;" onclick="quickAdd('face_b')">face_b</button>
+                <button class="btn-sm" style="background:#333;color:#aaa;font-size:11px;" onclick="quickAdd('fastener')">fastener</button>
+                <button class="btn-sm" style="background:#333;color:#aaa;font-size:11px;" onclick="quickAdd('clip')">clip</button>
+                <button class="btn-sm" style="background:#333;color:#aaa;font-size:11px;" onclick="quickAdd('barcode')">barcode</button>
+                <button class="btn-sm" style="background:#333;color:#aaa;font-size:11px;" onclick="quickAdd('protective_wrap')">protective_wrap</button>
+                <button class="btn-sm" style="background:#333;color:#aaa;font-size:11px;" onclick="quickAdd('black_pad')">black_pad</button>
+                <button class="btn-sm" style="background:#333;color:#aaa;font-size:11px;" onclick="quickAdd('insulate_pad')">insulate_pad</button>
+            </div>
+            <div class="form-actions">
+                <button class="btn-danger btn-sm" onclick="closeClassModal()">닫기</button>
+                <button class="btn-primary btn-sm" onclick="addClass()">추가</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/training.js?v=6"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+data/inspection.db
+data/photos/
+models/*.pt
+train_work/
+dataset/*/images/
+.env
+*.egg-info/
+dist/
+build/
+제품사진/

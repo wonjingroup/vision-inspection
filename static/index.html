@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>비전검사 시스템</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 네비게이션 -->
+    <nav class="nav">
+        <span class="nav-brand">VISION QA</span>
+        <a href="/" class="active">검사</a>
+        <a href="/products">제품관리</a>
+        <a href="/stats">통계</a>
+        <a href="/training">AI 학습</a>
+        <div class="nav-right">
+            <span id="demo-badge" class="badge" style="display:none; background:#e65100; color:#fff;">DEMO</span>
+            <span id="camera-status" style="font-size:12px; color:#888;">카메라 연결 중...</span>
+        </div>
+    </nav>
+
+    <!-- 메인 검사 영역 -->
+    <div class="inspection-container">
+        <!-- 비디오 -->
+        <div class="video-area">
+            <img id="video-feed" src="/api/stream" alt="카메라 피드">
+        </div>
+
+        <!-- 사이드 패널 -->
+        <div class="side-panel">
+            <!-- 상태 -->
+            <div class="panel-section">
+                <div class="panel-title">상태</div>
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                    <span id="state-badge" class="state-badge state-idle">대기 중</span>
+                    <span id="elapsed" style="font-size:13px; color:#888;"></span>
+                </div>
+                <div id="product-info" style="font-size:14px; color:#aaa;"></div>
+            </div>
+
+            <!-- 오늘 통계 -->
+            <div class="panel-section">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="panel-title" style="margin-bottom:0;">오늘 실적</div>
+                    <button class="btn-sm" style="background:#555;color:#aaa;font-size:11px;padding:2px 8px;"
+                            onclick="resetTodayStats()">초기화</button>
+                </div>
+                <div class="today-stats">
+                    <div class="stat-card total">
+                        <div class="value" id="stat-total">0</div>
+                        <div class="label">총 검사</div>
+                    </div>
+                    <div class="stat-card ok">
+                        <div class="value" id="stat-ok">0</div>
+                        <div class="label">OK</div>
+                    </div>
+                    <div class="stat-card ng">
+                        <div class="value" id="stat-ng">0</div>
+                        <div class="label">NG</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 부자재 체크리스트 -->
+            <div class="panel-section">
+                <div class="panel-title">부자재 검사</div>
+                <div class="face-tabs">
+                    <div class="face-tab" id="tab-a">A면 (앞)</div>
+                    <div class="face-tab" id="tab-b">B면 (뒤)</div>
+                </div>
+                <ul class="parts-checklist" id="parts-a"></ul>
+                <ul class="parts-checklist" id="parts-b" style="display:none;"></ul>
+            </div>
+
+            <!-- 컨트롤 -->
+            <div class="panel-section" style="margin-top:auto;">
+                <button id="btn-start" class="btn-primary" style="width:100%; margin-bottom:8px; font-size:18px; padding:14px 0;"
+                        onclick="startInspection()">검사시작</button>
+                <button id="btn-reset" class="btn-secondary" style="width:100%; margin-bottom:8px; display:none;"
+                        onclick="resetInspection()">검사 중단</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OK 오버레이 -->
+    <div class="result-overlay ok-overlay" id="ok-overlay">
+        <div class="result-text">OK</div>
+        <div class="result-sub" id="ok-product-name"></div>
+    </div>
+
+    <!-- NG 오버레이 -->
+    <div class="result-overlay ng-overlay" id="ng-overlay">
+        <div class="result-text">NG</div>
+        <div class="result-sub">부자재 누락 감지!</div>
+        <ul class="missing-list" id="missing-list"></ul>
+        <button class="dismiss-btn" onclick="dismissNg()">NG 해제</button>
+    </div>
+
+    <!-- 초기화 비밀번호 모달 -->
+    <div class="modal-backdrop" id="reset-modal">
+        <div class="modal" style="min-width:300px;">
+            <div class="modal-title">실적 초기화</div>
+            <div class="form-group">
+                <label>비밀번호</label>
+                <input type="password" id="reset-pw" placeholder="비밀번호 입력"
+                       onkeydown="if(event.key==='Enter')confirmResetStats()">
+            </div>
+            <div class="form-actions">
+                <button class="btn-danger btn-sm" onclick="closeResetModal()">취소</button>
+                <button class="btn-primary btn-sm" onclick="confirmResetStats()">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/sounds.js?v=3"></script>
+    <script src="/static/js/app.js?v=4"></script>
+</body>
+</html>
