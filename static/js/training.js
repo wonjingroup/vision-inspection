@@ -201,9 +201,10 @@ function renderImageGrid() {
         } else {
             div.classList.add('unlabeled');
         }
+        const imgSource = img.source === 'common' ? 'common' : selectedProductCode;
         div.innerHTML = `
             <img src="${img.url}" loading="lazy">
-            <button class="delete-btn" onclick="event.stopPropagation(); deleteImage('${img.filename}')" title="삭제">X</button>
+            <button class="delete-btn" onclick="event.stopPropagation(); deleteImage('${img.filename}', '${imgSource}')" title="삭제">X</button>
         `;
         div.onclick = () => selectImage(img);
         grid.appendChild(div);
@@ -223,9 +224,10 @@ async function captureFrame() {
     }
 }
 
-async function deleteImage(filename) {
+async function deleteImage(filename, source) {
     if (!confirm('이미지와 라벨을 삭제하시겠습니까?')) return;
-    await fetch(`/api/training/images/${encodeURIComponent(selectedProductCode)}/${filename}`, { method: 'DELETE' });
+    const code = source || selectedProductCode;
+    await fetch(`/api/training/images/${encodeURIComponent(code)}/${filename}`, { method: 'DELETE' });
     if (currentImage && currentImage.filename === filename) {
         currentImage = null;
         labels = [];
